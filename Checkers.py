@@ -1,4 +1,5 @@
 from tkinter import *
+from types import BuiltinFunctionType
 
 class CheckersPiece:
     '''represents a piece of Checkers'''
@@ -45,10 +46,10 @@ class CheckersBoard:
                 pos = (row, col)
                 
                 # find starting positions
-                if row % 2 != col % 2 and row < 3:
+                if row % 2 != col % 2 and row < rows//2 - 1:
                     # player 0
                     self.pieces.append(CheckersPiece(self.player_ids[0], pos))
-                elif row % 2 != col % 2 and row > 4:
+                elif row % 2 != col % 2 and row > rows//2:
                     # player 1
                     self.pieces.append(CheckersPiece(self.player_ids[1], pos))
 
@@ -79,6 +80,11 @@ class CheckersBoard:
                 positions.append(p.get_position())
 
         return positions
+    
+    def get_all_pieces(self):
+        '''CheckersBoard.get_all_pieces() -> list
+        returns all the pieces on board'''
+        return self.pieces
 
     def get_player(self):
         '''CheckersBoard.get_player() -> int
@@ -95,13 +101,16 @@ class CheckersBoard:
         returns endgame state'''
         return self.endgame
 
-    def is_movable(self, player, pos, is_king):
-        '''CheckersBoard.is_movable(piece) -> bool
-        returns True if piece is movable, False otherwise'''
-        (row, col) = pos
+    def is_movable(self, piece):
+        '''CheckersBoard.is_movable(piece) -> dict
+        returns a dict of the possible positions where piece can jump'''
+        if piece.get_player() != self.current_player:
+            return None
+
+        (row, col) = piece.get_position()
         possible_moves = []
-        if not is_king:
-            if player == 0:
+        if not piece.get_king():
+            if piece.get_player() == 0:
                 for dc in (-1, 1):
                     if (0 <= row+1 < self.rows) and (0 <= col+dc < self.columns):
                         possible_moves.append((row+1, col+dc))
@@ -120,20 +129,20 @@ class CheckersBoard:
                 possible_moves.remove(p)
 
         if len(possible_moves) != 0:
-            return True
+            return None
         else:
-            return False
+            return {piece: possible_moves}
 
     def is_jumpable(self, piece):
-        '''CheckersBoard.is_jumpable(piece) -> bool
-        returns True if piece is jumpable, False otherwise'''
+        '''CheckersBoard.is_jumpable(piece) -> dict
+        returns a dict of the possible positions where piece can jump'''
         if piece.get_player() != self.current_player:
-            return False
+            return None
 
         (row, col) = piece.get_position()
         possible_jumps = []
         if not piece.get_king():
-            if self.current_player == 0:
+            if piece.get_player() == 0:
                 for dc in (-1, 1):
                     if (0 <= row+1 < self.rows) and (0 <= col+dc < self.columns) and \
                         (row+1, col+dc) in self.get_all_pieces_positions(1):
@@ -148,7 +157,7 @@ class CheckersBoard:
                             (row-2, col+2*dc) not in self.get_all_pieces_positions():
                             possible_jumps.append((row-2, col+2*dc))
         else:
-            if self.current_player == 0:
+            if piece.get_player() == 0:
                 for dr in (-1, 1):
                     for dc in (-1, 1):
                         if (0 <= row+dr < self.rows) and (0 <= col+dc < self.columns) and \
@@ -160,113 +169,44 @@ class CheckersBoard:
                 for dr in (-1, 1):
                     for dc in (-1, 1):
                         if (0 <= row+dr < self.rows) and (0 <= col+dc < self.columns) and \
-                            (row+dr, col+dc) in self.get_all_pieces_positions(1):
+                            (row+dr, col+dc) in self.get_all_pieces_positions(0):
                             if (0 <= row+2*dr < self.rows) and (0 <= col+2*dc < self.columns) and \
                                 (row+2*dr, col+2*dc) not in self.get_all_pieces_positions():
                                 possible_jumps.append((row+2*dr, col+2*dc))
 
-        if len(possible_jumps) != 0:
-            return True
+        if len(possible_jumps) == 0:
+            return None
         else:
-            return False
+            return {piece: possible_jumps}
 
 
     def get_movable_pieces(self):
         '''CheckersBoard.get_movable_pieces() -> list
         returns a list of pieces that can move'''
-        movable_pieces = []
+        movable_pieces = {}
         for p in self.pieces:
-            if self.is_movable(p):
-                movable_pieces.append(p)
+            if self.is_movable(p) is not None:
+                movable_pieces[p] = self.is_movable(p).get(p)
 
         return movable_pieces
 
     def get_jumpable_pieces(self):
         '''CheckersBoard.get_jumpable_pieces() -> list
         returns a list of pieces that can jump'''
-        jumpable_pieces = []
+        jumpable_pieces = {}
         for p in self.pieces:
-            if self.is_jumpable(p):
-                jumpable_pieces.append(p)
+            if self.is_jumpable(p) is not None:
+                jumpable_pieces[p] = self.is_jumpable(p).get(p)
         
         return jumpable_pieces
 
-
-    def get_legal_jumps(self, position):
-        '''CheckersBoard.get_legal_jumps(position) -> list
-        returns a list legal jumps of the piece at position'''
-        (row, col) = position
-        legal_jumps = []
-
-        # position does not have a king
-        if not self.kings[position]:
-            # jumps for player 0
-            if self.board[position] == 0:
-                for dc in (-1, 1):
-                    # make sure that the adjacent pieces contain an opponent's piece
-                    if (0 <= row + 1 < 8) and (0 <= col + dc < 8) and \
-                       self.board[(row + 1, col + dc)] == 1:
-                        # make sure that the jump is on an empty square
-                        if (0 <= row + 2 < 8) and (0 <= col + 2*dc < 8) and \
-                           self.board[(row + 1, col + 2*dc)] is None:
-                            legal_jumps.append((row + 2, col + 2*dc))
-            # jumps for player 1
-            else:
-                for dc in (-1, 1):
-                    # make sure that the adjacent pieces contain an opponent's piece
-                    if (0 <= row - 1 < 8) and (0 <= col + dc < 8) and \
-                       self.board[(row - 1, col + dc)] == 0:
-                        # make sure that the jump is on an empty square
-                        if (0 <= row - 2 < 8) and (0 <= col + 2*dc < 8) and \
-                           self.board[(row - 2, col + 2*dc)] is None:
-                            legal_jumps.append((row - 2, col + 2*dc))
-        # position has a king
+    def get_playable_pieces(self):
+        '''CheckersBoard.get_playable_pieces() -> list
+        returns a list of pieces that can be played'''
+        if len(self.get_jumpable_pieces()) == 0:
+            return self.get_movable_pieces()
         else:
-            for dr in (-1, 1):
-                for dc in (-1, 1):
-                    # jumps for player 0 king
-                    if self.board[position] == 0:
-                        # make sure the adjacent squares have an opponent's piece
-                        if (0 <= row + dr < 8) and (0 <= row + dc < 8) and \
-                           self.board[(row + dr, col + dc)] == 1:
-                            # make sure the jump is on an empty square
-                            if (0 <= row + 2*dr < 8) and (0 <= row + 2*dc < 8) and \
-                               self.board[(row + 2*dr, col + 2*dc)] is None:
-                                legal_jumps.append((row + 2*dr, col + 2*dc))
-                    # jumps for player 1 king
-                    else:
-                        # make sure the adjacent squares have an oppoent's piece
-                        if (0 <= row + dr < 8) and (0 <= row + dc < 8) and \
-                           self.board[(row + dr, col + dc)] == 0:
-                            # make sure the jump is on an empty square
-                            if (0 <= row + 2*dr < 8) and (0 <= row + 2*dc < 8) and \
-                               self.board[(row + 2*dr, col + 2*dc)] is None:
-                                legal_jumps.append((row + 2*dr, col + 2*dc))
-
-        return legal_jumps
-
-    def get_legal_actions(self):
-        '''CheckersBoard.get_legal_actions() -> list
-        returns a list of the current player's legal actions'''
-        legal_actions = {}
-
-        # check for pieces that can jump
-        for row in range(8):
-            for col in range(8):
-                position = (row, col)
-                if self.board[position] == self.current_player:
-                    if self.get_legal_jumps(position) > 0:
-                        legal_actions[position] = self.get_legal_jumps()
- 
-        # if there are no pieces that can jump, check for pieces that can move
-        if len(legal_actions) == 0:
-            for row in range(8):
-                for col in range(8):
-                    if self.board[position] == self.current_player:
-                        if self.get_legal_moves(position) > 0:
-                            legal_actions[position] = self.get_legal_moves()
-
-        return legal_actions
+            return self.get_jumpable_pieces()
 
     def check_endgame(self):
         '''CheckersBoard.check_endgame()
@@ -280,23 +220,34 @@ class CheckersBoard:
 class CheckersSquare(Canvas):
     '''displays a square in the Checkers game'''
     
-    def __init__(self, master):
+    def __init__(self, master, pos):
         '''CheckersSquare(master)
         creates a new Checkers square'''
         super().__init__(master, width=50, height=50)
 
-        # set the mouse events
-        self.bind('<Button>', master.choose_piece)
-        self.bind('<Button>', master.move_piece)
+        self.master = master
+        self.pos = pos
 
-    def add_piece(self, color):
+        # set the mouse events
+        self.bind('<Button>', self.click_on)
+
+    def click_on(self, event):
+        pos = event.widget.get_position()
+        self.master.click_on(self)
+
+    def get_position(self):
+        '''CheckersSquare.get_position() -> (int, int)
+        returns position of square'''
+        return self.pos
+
+    def show_piece(self, color):
         '''CheckersSquare.add_piece(color)
         adds a piece to square of color'''
         self.create_oval(10, 10, 44, 44, fill=color)
 
-    def remove_piece(self):
-        '''CheckersSquare.remove_piece()
-        removes the current piece on square'''
+    def clear(self):
+        '''CheckersSquare.clear()
+        removes current piece on square'''
         oval_list = self.find_all()
         for oval in oval_list:
             self.delete(oval)
@@ -305,17 +256,18 @@ class CheckersSquare(Canvas):
 class CheckersGame(Frame):
     '''represents a game for Checkers'''
     
-    def __init__(self, master, rows=8, columns=8):
-        '''CheckersGame(master)
-        creates a new Checkers game'''
+    def __init__(self, master, rows=8, columns=8, colors=('red', 'white')):
+        '''CheckersGame(master[, rows=8, columns=8, colors=('red', 'white')])
+        creates a new Checkers game with rows * columns board and pieces of colors'''
         super().__init__(master, bg='white')
         self.grid()
         
         # set up board and piece colors
-        self.board = CheckersBoard()
-        self.colors = ('red', 'white')
+        self.board = CheckersBoard(rows, columns)
+        self.colors = colors
 
         # rows and columns
+        # TODO: use rows and columns from self.board
         self.rows = rows
         self.columns = columns
 
@@ -324,7 +276,7 @@ class CheckersGame(Frame):
         for row in range(rows):
             for col in range(columns):
                 pos = (row, col)
-                self.squares[pos] = CheckersSquare(self)
+                self.squares[pos] = CheckersSquare(self, pos)
                 self.squares[pos].grid(row=row, column=col)
                 
                 # make the squares different colors
@@ -335,35 +287,41 @@ class CheckersGame(Frame):
                     self.squares[pos]['bg'] = 'dark green'
                     self.squares[pos]['highlightbackground'] = 'dark green'
 
-        self.rowconfigure(8, minsize=3)
+        # status configuration
+        self.rowconfigure(rows, minsize=3)
+        status_row = rows + 1
 
-        # turn label
-        self.score_label = Label(self, text='Turn:', font=('Arial', 14), bg='white')
-        self.score_label.grid(row=9, column=1)
+        # turn label in status row
+        self.turn_label = Label(self, text='Turn:', font=('Arial', 14), bg='white')
+        self.turn_label.grid(row=status_row, column=1)
         
-        # turn color
-        self.turn_color = CheckersSquare(self)
-        self.turn_color.grid(row=9, column=2)
+        # turn color in status row
+        self.turn_color = CheckersSquare(self, (status_row,2))
+        self.turn_color.grid(row=status_row, column=2)
         self.turn_color.unbind('<Button>')
 
         self.update_display()
 
     def update_display(self):
-        CheckersGame.update_display()
-        '''updates squares to match board'''
-        pos_0 = self.board.get_all_pieces_positions(0)
-        pos_1 = self.board.get_all_pieces_positions(1)
+        '''CheckersGame.update_display()
+        updates squares to match board'''
+        for piece in self.board.get_all_pieces():
+            pos = piece.get_position()
+            self.squares[pos].show_piece(self.colors[piece.get_player()])
+            
+        for piece in self.board.get_playable_pieces():
+            self.squares[piece.get_position()]['highlightbackground'] = 'red'
 
-        # add pieces to the right squares
-        for p in pos_0:
-            self.squares[p].add_piece(self.colors(0))
-        for p in pos_1:
-            self.squares[p].add_piece(self.colors(1))
+        self.turn_color.show_piece(self.colors[self.board.get_player()])
 
-        # set the turn to current player
-        current_player = self.board.get_player()
-        self.turn_color.remove_piece()
-        self.turn_color.add_piece(self.colors[current_player])
+    def click_on(self, square):
+        if square['highlightbackground'] == 'red':
+            square['highlightbackground'] = 'blue'
+
+        # TODO: update self.board, and update self.squares accordingly
+        self.board.next_player()
+
+        self.update_display()
 
     def choose_piece(self, event):
         '''CheckersGame.get_click(event)
