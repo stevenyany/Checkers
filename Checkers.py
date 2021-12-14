@@ -30,9 +30,9 @@ class CheckersPiece:
         turns piece into a king'''
         self.is_king = True
 
-    def move(self, pos):
-        '''CheckersPieces.move(pos)
-        moves piece to pos'''
+    def change_position(self, pos):
+        '''CheckersPieces.change_position(pos)
+        changes position of piece to pos'''
         self.pos = pos
 
 
@@ -71,6 +71,11 @@ class CheckersBoard:
                 return p
 
         return None
+
+    def remove_piece(self, piece):
+        '''CheckersBoard.remove_piece(piece)
+        removes piece from board'''
+        self.pieces.remove(piece)
 
     def get_all_pieces_positions(self, player=None):
         '''CheckersBoard.get_all_pieces_positions([players=None]) -> list
@@ -116,21 +121,20 @@ class CheckersBoard:
         if not piece.get_king():
             if piece.get_player() == 0:
                 for dc in (-1, 1):
-                    if (0 <= row+1 < self.rows) and (0 <= col+dc < self.columns):
+                    if (0 <= row+1 < self.rows) and (0 <= col+dc < self.columns) and \
+                        (row+1, col+dc) not in self.get_all_pieces_positions():
                         possible_moves.append((row+1, col+dc))
             else:
                 for dc in (-1, 1):
-                    if (0 <= row-1 < self.rows) and (0 <= col+dc < self.columns):
+                    if (0 <= row-1 < self.rows) and (0 <= col+dc < self.columns) and \
+                        (row-1, col+dc) not in self.get_all_pieces_positions():
                         possible_moves.append((row-1, col+dc))
         else:
             for dr in (-1, 1):
                 for dc in (-1, 1):
-                    if (0 <= row+dr < self.rows) and (0 <= col+dc < self.columns):
+                    if (0 <= row+dr < self.rows) and (0 <= col+dc < self.columns) and \
+                        (row+dr, col+dc) not in self.get_all_pieces_positions():
                         possible_moves.append((row+dr, col+dc))    
-                
-        for p in self.get_all_pieces_positions():
-            if p in possible_moves:
-                possible_moves.remove(p)
 
         if len(possible_moves) == 0:
             return None
@@ -212,16 +216,15 @@ class CheckersBoard:
         else:
             return self.get_jumpable_pieces()
 
-    def try_move(self, pos):
-        '''CheckersBoard.try_move(pos)'''
-        playable_pos = []
-        for p in self.get_playable_pieces():
-            playable_pos.append(p.get_position())
-
-        if pos not in playable_pos:
-            return False
+    def move(self, piece, pos):
+        piece.change_position(pos)
+        (row, col) = pos
+        if self.current_player == 0:
+            if row == 7:
+                piece.make_king()
         else:
-            return True
+            if row == 0:
+                piece.make_king()
 
     def check_endgame(self):
         '''CheckersBoard.check_endgame()
@@ -251,10 +254,20 @@ class CheckersSquare(Canvas):
         returns position of square'''
         return self.pos
 
-    def show_piece(self, color):
+    def show_piece(self, color, with_star=False):
         '''CheckersSquare.add_piece(color)
         adds a piece to square of color'''
         self.create_oval(10, 10, 44, 44, fill=color)
+        if with_star:
+            self.create_text(27, 35, fill='black', font=('Arial', 30), text='*')
+
+    def highlight(self, on=True):
+        if on:
+            self['bg'] = 'light green'
+            self['highlightbackground'] = 'yellow'
+        else:
+            self['bg'] = 'dark green'
+            self['highlightbackground'] = 'dark green'
 
     def clear(self):
         '''CheckersSquare.clear()
@@ -311,40 +324,80 @@ class CheckersGame(Frame):
         self.turn_color.grid(row=status_row, column=2)
         self.turn_color.unbind('<Button>')
 
+        self.input_mode = 0     # input_mode: 0 for select, 1 for move
+
+        self.highlight_squares = []
+        for p in self.board.get_playable_pieces():
+            self.highlight_squares.append(self.squares[p.get_position()])
+
         self.update_display()
 
     def update_display(self):
         '''CheckersGame.update_display()
         updates squares to match board'''
+        for pos in self.squares:
+            self.squares[pos].clear()
         for piece in self.board.get_all_pieces():
             pos = piece.get_position()
-            self.squares[pos].show_piece(self.colors[piece.get_player()])
+            self.squares[pos].show_piece(self.colors[piece.get_player()], piece.get_king())
             
-        for piece in self.board.get_playable_pieces():
-            self.squares[piece.get_position()]['highlightbackground'] = 'yellow'
+        for square in self.highlight_squares: 
+            square.highlight()
 
         self.turn_color.show_piece(self.colors[self.board.get_player()])
 
+        if isinstance(self.board.get_endgame(), int):
+            self.turn_color.clear()
+            win_label = Label(self, text=f'{self.colors[1-self.board.get_player()]} wins!'.capitalize(), font=('Arial', 24))
+            win_label.grid(row=self.rows+1, column=self.columns//2, columnspan=4)
+
     def click_on(self, event):
-        pos = event.widget.get_position()
-        if not self.board.try_move(pos):
+        square = event.widget
+        pos = square.get_position()
+        if not square in self.highlight_squares:
             return
 
-        for p in self.board.get_playable_pieces():
-            self.squares[p.get_position()]['highlightbackground'] = 'dark green'
-        
-        self.squares[pos]['highlightbackground'] = 'black'
+        # turn highlight off on current highlightsqures
+        for sq in self.highlight_squares: 
+            sq.highlight(False)
 
-        for p in self.board.get_playable_pieces():
-            if p.get_position() == pos:
-                possible_places = self.board.get_playable_pieces().get(p)
-        
-        for position in possible_places:
-            self.squares[position]['highlightbackground'] = 'yellow'
         # TODO: update self.board, and update self.squares accordingly
-        self.board.next_player()
+        if self.input_mode == 1:
+            # self.board.move to change piece pos and remove piece if applicable
+            self.board.move(self.board.get_piece(self.selected_pos), pos)
+            (row_1, col_1) = self.selected_pos
+            (row_2, col_2) = pos
+            if abs(row_1 - row_2) == 2 and abs(col_1 - col_2) == 2:
+                remove_pos = ((row_1 + row_2) // 2, (col_1 + col_2) // 2)
+                self.board.remove_piece(self.board.get_piece(remove_pos))
+
+            self.board.next_player()
+            self.board.check_endgame()
+
+            # set new highlight squares based on next playable pieces
+            self.highlight_squares = []
+            for p in self.board.get_playable_pieces():
+                self.highlight_squares.append(self.squares[p.get_position()])
+
+            self.input_mode = 0
+        else:
+            # set new highlight squares based on the selected square and movable squares
+            self.highlight_squares = []
+            for s in self.get_movable_squares(square):
+                self.highlight_squares.append(s)
+
+            self.selected_pos = square.get_position()
+            self.input_mode = 1
 
         self.update_display()
+
+    def get_movable_squares(self, square):
+        movable_squares = []
+        piece = self.board.get_piece(square.get_position())
+        for pos in self.board.get_playable_pieces().get(piece):
+            movable_squares.append(self.squares[pos])
+
+        return movable_squares
 
 
 def play_checkers():
