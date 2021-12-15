@@ -51,11 +51,11 @@ class CheckersBoard:
                 
                 # find starting positions
                 if row % 2 != col % 2 and row < rows//2 - 1:
-                    # player 0
-                    self.pieces.append(CheckersPiece(self.player_ids[0], pos))
-                elif row % 2 != col % 2 and row > rows//2:
                     # player 1
                     self.pieces.append(CheckersPiece(self.player_ids[1], pos))
+                elif row % 2 != col % 2 and row > rows//2:
+                    # player 0
+                    self.pieces.append(CheckersPiece(self.player_ids[0], pos))
 
         # attributes
         self.rows = rows
@@ -121,14 +121,14 @@ class CheckersBoard:
         if not piece.get_king():
             if piece.get_player() == 0:
                 for dc in (-1, 1):
-                    if (0 <= row+1 < self.rows) and (0 <= col+dc < self.columns) and \
-                        (row+1, col+dc) not in self.get_all_pieces_positions():
-                        possible_moves.append((row+1, col+dc))
-            else:
-                for dc in (-1, 1):
                     if (0 <= row-1 < self.rows) and (0 <= col+dc < self.columns) and \
                         (row-1, col+dc) not in self.get_all_pieces_positions():
                         possible_moves.append((row-1, col+dc))
+            else:
+                for dc in (-1, 1):
+                    if (0 <= row+1 < self.rows) and (0 <= col+dc < self.columns) and \
+                        (row+1, col+dc) not in self.get_all_pieces_positions():
+                        possible_moves.append((row+1, col+dc))
         else:
             for dr in (-1, 1):
                 for dc in (-1, 1):
@@ -152,18 +152,18 @@ class CheckersBoard:
         if not piece.get_king():
             if piece.get_player() == 0:
                 for dc in (-1, 1):
-                    if (0 <= row+1 < self.rows) and (0 <= col+dc < self.columns) and \
-                        (row+1, col+dc) in self.get_all_pieces_positions(1):
-                        if (0 <= row+2 < self.rows) and (0 <= col+2*dc < self.columns) and \
-                            (row+2, col+2*dc) not in self.get_all_pieces_positions():
-                            possible_jumps.append((row+2, col+2*dc))
-            else:
-                for dc in (-1, 1):
                     if (0 <= row-1 < self.rows) and (0 <= col+dc < self.columns) and \
-                        (row-1, col+dc) in self.get_all_pieces_positions(0):
+                        (row-1, col+dc) in self.get_all_pieces_positions(1):
                         if (0 <= row-2 < self.rows) and (0 <= col+2*dc < self.columns) and \
                             (row-2, col+2*dc) not in self.get_all_pieces_positions():
                             possible_jumps.append((row-2, col+2*dc))
+            else:
+                for dc in (-1, 1):
+                    if (0 <= row+1 < self.rows) and (0 <= col+dc < self.columns) and \
+                        (row+1, col+dc) in self.get_all_pieces_positions(0):
+                        if (0 <= row+2 < self.rows) and (0 <= col+2*dc < self.columns) and \
+                            (row+2, col+2*dc) not in self.get_all_pieces_positions():
+                            possible_jumps.append((row+2, col+2*dc))
         else:
             if piece.get_player() == 0:
                 for dr in (-1, 1):
@@ -220,10 +220,10 @@ class CheckersBoard:
         piece.change_position(pos)
         (row, col) = pos
         if self.current_player == 0:
-            if row == 7:
+            if row == 0:
                 piece.make_king()
         else:
-            if row == 0:
+            if row == 7:
                 piece.make_king()
 
     def check_endgame(self):
@@ -331,26 +331,7 @@ class CheckersGame(Frame):
             self.highlight_squares.append(self.squares[p.get_position()])
 
         self.update_display()
-
-    def update_display(self):
-        '''CheckersGame.update_display()
-        updates squares to match board'''
-        for pos in self.squares:
-            self.squares[pos].clear()
-        for piece in self.board.get_all_pieces():
-            pos = piece.get_position()
-            self.squares[pos].show_piece(self.colors[piece.get_player()], piece.get_king())
-            
-        for square in self.highlight_squares: 
-            square.highlight()
-
-        self.turn_color.show_piece(self.colors[self.board.get_player()])
-
-        if isinstance(self.board.get_endgame(), int):
-            self.turn_color.clear()
-            win_label = Label(self, text=f'{self.colors[1-self.board.get_player()]} wins!'.capitalize(), font=('Arial', 24))
-            win_label.grid(row=self.rows+1, column=self.columns//2, columnspan=4)
-
+    
     def click_on(self, event):
         square = event.widget
         pos = square.get_position()
@@ -370,11 +351,35 @@ class CheckersGame(Frame):
             if abs(row_1 - row_2) == 2 and abs(col_1 - col_2) == 2:
                 remove_pos = ((row_1 + row_2) // 2, (col_1 + col_2) // 2)
                 self.board.remove_piece(self.board.get_piece(remove_pos))
-
-            self.board.next_player()
+                self.input_mode = 2
+                
+            self.squares[self.selected_pos]['highlightbackground'] = 'dark green'
             self.board.check_endgame()
 
-            # set new highlight squares based on next playable pieces
+            if self.input_mode != 2:
+                self.board.next_player()
+                self.highlight_squares = []
+                for p in self.board.get_playable_pieces():
+                    self.highlight_squares.append(self.squares[p.get_position()])
+                
+                self.input_mode = 0
+        elif self.input_mode == 2:
+            jump_in_progress = True
+            while jump_in_progress:
+                self.selected_pos = square.get_position()
+                self.squares[self.selected_pos]['highlightbackground'] = 'yellow'
+                self.highlight_squares = []
+                piece = self.board.get_piece(self.selected_pos)
+                if self.board.is_jumpable(piece) is not None:
+                    for pos in self.board.is_jumpable(piece).get(piece):
+                        self.highlight_squares.append(self.squares[pos])
+                else:
+                    jump_in_progress = False
+                self.update_display()
+                
+            self.squares[self.selected_pos]['highlightbackground'] = 'dark green'
+            self.board.next_player()
+            self.board.check_endgame()
             self.highlight_squares = []
             for p in self.board.get_playable_pieces():
                 self.highlight_squares.append(self.squares[p.get_position()])
@@ -387,6 +392,7 @@ class CheckersGame(Frame):
                 self.highlight_squares.append(s)
 
             self.selected_pos = square.get_position()
+            self.squares[self.selected_pos]['highlightbackground'] = 'yellow'
             self.input_mode = 1
 
         self.update_display()
@@ -398,6 +404,27 @@ class CheckersGame(Frame):
             movable_squares.append(self.squares[pos])
 
         return movable_squares
+
+    def update_display(self):
+        '''CheckersGame.update_display()
+        updates squares to match board'''
+        for pos in self.squares:
+            self.squares[pos].clear()
+        
+        for piece in self.board.get_all_pieces():
+            pos = piece.get_position()
+            self.squares[pos].show_piece(self.colors[piece.get_player()], piece.get_king())
+
+        if isinstance(self.board.get_endgame(), int):
+            self.turn_color.clear()
+            win_label = Label(self, text=f'{self.colors[1-self.board.get_player()]} wins!'.capitalize(), font=('Arial', 24))
+            win_label.grid(row=self.rows+1, column=self.columns//2, columnspan=4)
+            return
+
+        for square in self.highlight_squares: 
+            square.highlight()
+
+        self.turn_color.show_piece(self.colors[self.board.get_player()])
 
 
 def play_checkers():
