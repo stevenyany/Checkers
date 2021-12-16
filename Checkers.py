@@ -351,40 +351,30 @@ class CheckersGame(Frame):
             if abs(row_1 - row_2) == 2 and abs(col_1 - col_2) == 2:
                 remove_pos = ((row_1 + row_2) // 2, (col_1 + col_2) // 2)
                 self.board.remove_piece(self.board.get_piece(remove_pos))
-                self.input_mode = 2
-                
-            self.squares[self.selected_pos]['highlightbackground'] = 'dark green'
-            self.board.check_endgame()
 
-            if self.input_mode != 2:
+                active_piece = self.board.get_piece(pos) 
+                if active_piece not in self.board.get_playable_pieces():
+                    self.board.next_player()
+                    self.highlight_squares = []
+                    for p in self.board.get_playable_pieces():
+                        self.highlight_squares.append(self.squares[p.get_position()])
+                else:
+                    if self.board.is_jumpable(active_piece) is not None:
+                        self.highlight_squares = [self.squares[active_piece.get_position()]]
+                    else:
+                        self.board.next_player()
+                        self.highlight_squares = []
+                        for p in self.board.get_playable_pieces():
+                            self.highlight_squares.append(self.squares[p.get_position()])
+            else:
                 self.board.next_player()
+
                 self.highlight_squares = []
                 for p in self.board.get_playable_pieces():
                     self.highlight_squares.append(self.squares[p.get_position()])
-                
-                self.input_mode = 0
-        elif self.input_mode == 2:
-            jump_in_progress = True
-            while jump_in_progress:
-                self.selected_pos = square.get_position()
-                self.squares[self.selected_pos]['highlightbackground'] = 'yellow'
-                self.highlight_squares = []
-                piece = self.board.get_piece(self.selected_pos)
-                if self.board.is_jumpable(piece) is not None:
-                    for pos in self.board.is_jumpable(piece).get(piece):
-                        self.highlight_squares.append(self.squares[pos])
-                else:
-                    jump_in_progress = False
-                self.update_display()
-                
-            self.squares[self.selected_pos]['highlightbackground'] = 'dark green'
-            self.board.next_player()
-            self.board.check_endgame()
-            self.highlight_squares = []
-            for p in self.board.get_playable_pieces():
-                self.highlight_squares.append(self.squares[p.get_position()])
 
             self.input_mode = 0
+            self.board.check_endgame()
         else:
             # set new highlight squares based on the selected square and movable squares
             self.highlight_squares = []
@@ -392,7 +382,6 @@ class CheckersGame(Frame):
                 self.highlight_squares.append(s)
 
             self.selected_pos = square.get_position()
-            self.squares[self.selected_pos]['highlightbackground'] = 'yellow'
             self.input_mode = 1
 
         self.update_display()
