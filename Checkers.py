@@ -344,12 +344,15 @@ class CheckersGame(Frame):
 
         # TODO: update self.board, and update self.squares accordingly
         if self.input_mode == 1:
+            self.input_mode = 0
+
             # self.board.move to change piece pos and remove piece if applicable
+            was_not_king = not self.board.get_piece(self.selected_pos).get_king()
             self.board.move(self.board.get_piece(self.selected_pos), pos)
-            (row_1, col_1) = self.selected_pos
-            (row_2, col_2) = pos
-            if abs(row_1 - row_2) == 2 and abs(col_1 - col_2) == 2:
-                remove_pos = ((row_1 + row_2) // 2, (col_1 + col_2) // 2)
+            (row_old, col_old) = self.selected_pos
+            (row_new, col_new) = pos
+            if abs(row_old-row_new) == 2 and abs(col_old-col_new) == 2:
+                remove_pos = ((row_old+row_new) // 2, (col_old+col_new) // 2)
                 self.board.remove_piece(self.board.get_piece(remove_pos))
 
                 active_piece = self.board.get_piece(pos) 
@@ -359,8 +362,15 @@ class CheckersGame(Frame):
                     for p in self.board.get_playable_pieces():
                         self.highlight_squares.append(self.squares[p.get_position()])
                 else:
-                    if self.board.is_jumpable(active_piece) is not None:
-                        self.highlight_squares = [self.squares[active_piece.get_position()]]
+                    is_king = active_piece.get_king()
+                    new_king = was_not_king and is_king
+                    if (self.board.is_jumpable(active_piece) is not None) and (not new_king):
+                        # need to jump again
+                        self.input_mode = 1
+                        self.selected_pos = pos
+                        self.highlight_squares = []
+                        for sq in self.get_movable_squares(self.squares[pos]):
+                            self.highlight_squares.append(sq)
                     else:
                         self.board.next_player()
                         self.highlight_squares = []
@@ -373,16 +383,16 @@ class CheckersGame(Frame):
                 for p in self.board.get_playable_pieces():
                     self.highlight_squares.append(self.squares[p.get_position()])
 
-            self.input_mode = 0
             self.board.check_endgame()
         else:
+            self.input_mode = 1
+
             # set new highlight squares based on the selected square and movable squares
             self.highlight_squares = []
             for s in self.get_movable_squares(square):
                 self.highlight_squares.append(s)
 
             self.selected_pos = square.get_position()
-            self.input_mode = 1
 
         self.update_display()
 
